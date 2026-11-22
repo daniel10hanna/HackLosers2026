@@ -1,7 +1,14 @@
+
 import { useState } from "react";
-import { Button, ScrollView } from "react-native";
+import {
+  Button,
+  Modal,
+  Pressable,
+  ScrollView,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { FitDetails } from "@/components/fit-details";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { BottomTabInset } from "@/constants/theme";
@@ -13,6 +20,10 @@ export default function HomeScreen() {
   const [liveListings, setLiveListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // US-02: Track the currently selected listing
+  const [selectedListing, setSelectedListing] =
+    useState<Listing | null>(null);
 
   const listings = mode === "demo" ? demoListings : liveListings;
 
@@ -31,7 +42,9 @@ export default function HomeScreen() {
       setLiveListings(await loadLiveListings());
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Could not load live listings.",
+        err instanceof Error
+          ? err.message
+          : "Could not load live listings.",
       );
     } finally {
       setLoading(false);
@@ -49,6 +62,7 @@ export default function HomeScreen() {
           }}
         >
           <ThemedText type="title">MTL NOW</ThemedText>
+
           <Button
             title={mode === "demo" ? "Switch to Live" : "Switch to Demo"}
             onPress={switchMode}
@@ -64,23 +78,76 @@ export default function HomeScreen() {
               <ThemedText>
                 {mode === "demo" ? "Demo" : "Live"} listings ({listings.length})
               </ThemedText>
+
               {listings.map((listing) => (
-                <ThemedView
+                <Pressable
                   key={`${listing.kind}-${listing.id}`}
-                  type="backgroundElement"
-                  style={{ padding: 16, borderRadius: 12 }}
+                  onPress={() => setSelectedListing(listing)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View details for ${listing.title}`}
                 >
-                  <ThemedText type="smallBold">{listing.title}</ThemedText>
-                  <ThemedText type="small">
-                    {listing.kind === "event" ? "Event" : "Restaurant"}
-                    {" · "}
-                    {listing.audience_tags.join(", ")}
-                  </ThemedText>
-                </ThemedView>
+                  <ThemedView
+                    type="backgroundElement"
+                    style={{ padding: 16, borderRadius: 12 }}
+                  >
+                    <ThemedText type="smallBold">
+                      {listing.title}
+                    </ThemedText>
+
+                    <ThemedText type="small">
+                      {listing.kind === "event" ? "Event" : "Restaurant"}
+                      {" · "}
+                      {listing.audience_tags.join(", ")}
+                    </ThemedText>
+
+                    <ThemedText type="small">
+                      View details →
+                    </ThemedText>
+                  </ThemedView>
+                </Pressable>
               ))}
             </>
           )}
         </ScrollView>
+
+        {/* US-02: Listing details modal */}
+        <Modal
+          visible={selectedListing !== null}
+          animationType="slide"
+          onRequestClose={() => setSelectedListing(null)}
+        >
+          <ThemedView style={{ flex: 1 }}>
+            <SafeAreaView style={{ flex: 1 }}>
+              <ScrollView
+                contentContainerStyle={{
+                  padding: 24,
+                  gap: 16,
+                }}
+              >
+                <Button
+                  title="Back to listings"
+                  onPress={() => setSelectedListing(null)}
+                />
+
+                {selectedListing && (
+                  <>
+                    <ThemedText type="title">
+                      {selectedListing.title}
+                    </ThemedText>
+
+                    <ThemedText>
+                      {selectedListing.kind === "event"
+                        ? "Event"
+                        : "Restaurant"}
+                    </ThemedText>
+
+                    <FitDetails listing={selectedListing} />
+                  </>
+                )}
+              </ScrollView>
+            </SafeAreaView>
+          </ThemedView>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
   );
