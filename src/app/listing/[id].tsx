@@ -2,6 +2,7 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import { Linking, ScrollView } from "react-native";
 
+import { FitDetails } from "@/components/fit-details";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { formatPrice, formatWhen } from "@/lib/listings";
@@ -42,7 +43,7 @@ export default function ListingDetailScreen() {
             Open original source
           </ThemedText>
         )}
-        {/* US-02 (Matvei): Who it's for / Access / Safety sections go here. */}
+                <FitDetails listing={listing} />
       </ScrollView>
     </ThemedView>
   );
