@@ -8,9 +8,10 @@ import {
 } from "expo-router/ui";
 import { SymbolView } from "expo-symbols";
 import type { ComponentPropsWithRef } from "react";
-import { Pressable, StyleSheet, useColorScheme, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { Colors, MaxContentWidth, Spacing } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 import { ExternalLink } from "./external-link";
 import { ThemedText } from "./themed-text";
@@ -27,6 +28,9 @@ export default function AppTabs() {
           </TabTrigger>
           <TabTrigger name="explore" href="/explore" asChild>
             <TabButton>Explore</TabButton>
+          </TabTrigger>
+          <TabTrigger name="profile" href="/profile" asChild>
+            <TabButton>Profile</TabButton>
           </TabTrigger>
         </CustomTabList>
       </TabList>
