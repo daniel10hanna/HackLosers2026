@@ -19,16 +19,17 @@ test("filter placeholder lets every demo listing through", () => {
   assert.ok(demoListings.every((listing) => passes(listing, { indoor: true })));
 });
 
-test("ranking placeholder preserves the original listing order", () => {
-  const originalOrder = demoListings.map((listing) => listing.id);
+test("ranking puts Family listings first and keeps every listing (US-03)", () => {
   const ranked = sortForPrefs(demoListings, {
     audience: "Family",
     interests: ["Art"],
   });
+  const family = demoListings.filter((listing) => listing.audience_tags.includes("Family"));
 
+  assert.equal(ranked.length, demoListings.length);
   assert.deepEqual(
-    ranked.map((listing) => listing.id),
-    originalOrder,
+    ranked.slice(0, family.length).map((listing) => listing.id),
+    family.map((listing) => listing.id),
   );
 });
 

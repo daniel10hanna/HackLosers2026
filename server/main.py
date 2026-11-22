@@ -1,18 +1,20 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 from typing import Annotated
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAIError
+from google.genai.errors import APIError
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from listings import (
     MONTREAL, Listing, available, criteria_chips, explain, keyword_search,
-    load_listings, rank_listings,
+    load_demo_listings, load_listings, rank_listings,
 )
-from llm import extract_criteria
+from llm import extract_criteria, gemini_failure_category
 
 logger = logging.getLogger(__name__)
 SEARCH_TIMEOUT = 8.0
@@ -52,9 +54,11 @@ async def health():
 async def search(request: SearchRequest):
     loop = asyncio.get_running_loop()
     deadline = loop.time() + SEARCH_TIMEOUT
+    demo_path = os.getenv("US06_DEMO_LISTINGS_FILE", "").strip()
+    source = load_demo_listings(demo_path) if demo_path else load_listings()
     try:
-        listings = await asyncio.wait_for(load_listings(), timeout=5)
-    except (TimeoutError, ValueError, ExceptionGroup) as error:
+        listings = await asyncio.wait_for(source, timeout=5)
+    except (TimeoutError, ValueError, OSError, ExceptionGroup) as error:
         logger.warning("Listing retrieval unavailable (%s)", type(error).__name__)
         raise HTTPException(503, "Published listings are unavailable") from error
 
@@ -64,8 +68,12 @@ async def search(request: SearchRequest):
     try:
         async with asyncio.timeout_at(deadline):
             criteria = await extract_criteria(request.query, now, categories)
-    except (OpenAIError, ValueError, TimeoutError) as error:
-        logger.info("Using basic search (%s)", type(error).__name__)
+    except (APIError, httpx.RequestError, ValueError, TimeoutError) as error:
+        status = error.code if isinstance(error, APIError) and isinstance(error.code, int) else None
+        logger.warning(
+            "Gemini fallback category=%s exception=%s http_status=%s",
+            gemini_failure_category(error), type(error).__name__, status,
+        )
         return build_result(eligible, keyword_search(eligible, request.query, now), [], True)
     matched = rank_listings(eligible, criteria, now)
     return build_result(eligible, matched, criteria_chips(criteria), False)

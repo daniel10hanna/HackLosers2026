@@ -3,23 +3,29 @@ import type { Listing } from "./feed";
 import type { Preferences } from "./personalize";
 
 export function reasons(
-  event: Listing,
+  listing: Listing,
   prefs?: Preferences,
 ): string[] {
   const result: string[] = [];
 
-  // 1. Personalized audience reason
+  // Personalized audience match
   if (
     prefs?.audience &&
-    event.audience_tags.includes(prefs.audience)
+    listing.audience_tags?.includes(prefs.audience)
   ) {
-    result.push(
-      `Matches your ${prefs.audience} preference`,
-    );
+    result.push(`Matches your ${prefs.audience} preference`);
   }
 
-  // 2. Personalized interest reasons
-  const listingText = `${event.title} ${event.kind}`.toLowerCase();
+  // Personalized interest matches
+  const listingText = [
+    listing.title,
+    listing.kind,
+    listing.category,
+    listing.description,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
   const matchedInterests = new Set<string>();
 
@@ -36,19 +42,23 @@ export function reasons(
     }
   }
 
-  // 3. Practical recommendation reasons
-  if (event.is_indoor === true) {
+  // Practical recommendation reasons
+  if (listing.price === 0) {
+    result.push("Free");
+  }
+
+  if (listing.is_indoor === true) {
     result.push("Indoor");
   }
 
-  if (event.kid_friendly === true) {
+  if (listing.kid_friendly === true) {
     result.push("Kid-friendly");
   }
 
-  if (event.wheelchair_accessible === true) {
+  if (listing.wheelchair_accessible === true) {
     result.push("Accessible");
   }
 
-  // 4. Return a maximum of three reasons
+  // Maximum of three reasons, personalized reasons first
   return result.slice(0, 3);
 }

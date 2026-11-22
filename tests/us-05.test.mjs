@@ -125,3 +125,44 @@ test("US-05: generates consistent recommendation reasons", () => {
         reasons(listing, prefs),
     );
 });
+
+test("US-05: generates Free for zero-price listings", () => {
+    const listing = {
+        ...findListing("demo-02"),
+        price: 0,
+    };
+
+    assert.ok(reasons(listing).includes("Free"));
+});
+
+test("US-05: does not generate Free for paid listings", () => {
+    const listing = {
+        ...findListing("demo-02"),
+        price: 20,
+    };
+
+    assert.ok(!reasons(listing).includes("Free"));
+});
+
+test("US-05: does not generate Free for unknown prices", () => {
+    const listing = {
+        ...findListing("demo-02"),
+        price: null,
+    };
+
+    assert.ok(!reasons(listing).includes("Free"));
+});
+
+test("US-05: matches interests using listing category", () => {
+    const listing = {
+        ...findListing("demo-02"),
+        category: "Music",
+    };
+
+    assert.ok(
+        reasons(listing, {
+            audience: null,
+            interests: ["Music"],
+        }).includes("Matches your Music interest"),
+    );
+});
