@@ -1,4 +1,5 @@
-
+import { RecommendationChips } from "@/components/recommendation-chips";
+import { usePreferences } from "@/lib/preferences";
 import { useState } from "react";
 import {
   Button,
@@ -16,6 +17,7 @@ import { demoListings } from "@/lib/demo";
 import { loadLiveListings, type Listing } from "@/lib/feed";
 
 export default function HomeScreen() {
+  const { prefs } = usePreferences();
   const [mode, setMode] = useState<"demo" | "live">("demo");
   const [liveListings, setLiveListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,6 +101,12 @@ export default function HomeScreen() {
                       {" · "}
                       {listing.audience_tags.join(", ")}
                     </ThemedText>
+
+                    {/* US-05: Recommendation reasons */}
+                    <RecommendationChips
+                      listing={listing}
+                      prefs={prefs}
+                    />
 
                     <ThemedText type="small">
                       View details →

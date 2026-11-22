@@ -1,3 +1,4 @@
+
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -31,8 +32,12 @@ test("ranking placeholder preserves the original listing order", () => {
   );
 });
 
-test("match-reason placeholder returns an empty array", () => {
-  assert.deepEqual(reasons(demoListings[0]), []);
+test("recommendation reasons reflect listing information", () => {
+  assert.deepEqual(reasons(demoListings[0]), [
+    "Indoor",
+    "Kid-friendly",
+    "Accessible",
+  ]);
 });
 
 test("AI search placeholder returns an empty result", async () => {
