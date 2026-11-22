@@ -1,14 +1,14 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { StyleSheet, View } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StyleSheet, View } from "react-native";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AppearanceProvider } from '@/lib/appearance';
-import { AuthProvider } from '@/lib/auth';
-import { ListingsProvider } from '@/lib/listings-provider';
-import { PreferencesProvider, usePreferences } from '@/lib/preferences';
-import OnboardingScreen from './onboarding';
+import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { AppearanceProvider } from "@/lib/appearance";
+import { AuthProvider } from "@/lib/auth";
+import { ListingsProvider } from "@/lib/listings-provider";
+import { PreferencesProvider, usePreferences } from "@/lib/preferences";
+import OnboardingScreen from "./onboarding";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -27,16 +27,22 @@ function FirstLaunch() {
 function ThemedApp() {
   const colorScheme = useColorScheme();
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <PreferencesProvider>
           <ListingsProvider>
             <AnimatedSplashOverlay />
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="listing/[id]" options={{ title: 'Listing' }} />
-              <Stack.Screen name="onboarding" options={{ title: 'Your outing' }} />
-              <Stack.Screen name="ask" options={{ title: 'Ask AI' }} />
+              <Stack.Screen
+                name="listing/[id]"
+                options={{ title: "Listing" }}
+              />
+              <Stack.Screen
+                name="onboarding"
+                options={{ title: "Your outing" }}
+              />
+              <Stack.Screen name="ask" options={{ title: "Ask AI" }} />
             </Stack>
             <FirstLaunch />
           </ListingsProvider>
