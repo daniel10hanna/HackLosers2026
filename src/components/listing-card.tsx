@@ -1,6 +1,8 @@
 // OWNER: Lamees (US-01). Card used by every list (feed, search, saved, Ask AI).
 import { router } from "expo-router";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
+
+import { FavoriteButton } from "@/components/favorite-button";
 
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -16,7 +18,11 @@ export function ListingCard({ listing }: { listing: Listing }) {
       onPress={() => router.push({ pathname: "/listing/[id]", params: { id: listing.id } })}
     >
       <ThemedView type="backgroundElement" style={{ padding: 16, borderRadius: 12, gap: 4 }}>
-        <ThemedText type="smallBold">{listing.title}</ThemedText>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+          <ThemedText type="smallBold" style={{ flex: 1 }}>{listing.title}</ThemedText>
+          {/* Tanzia: save / unsave */}
+          <FavoriteButton listing={listing} size={20} />
+        </View>
         <ThemedText type="small">
           {listing.kind === "event" ? "Event" : "Restaurant"}
           {listing.category ? ` · ${listing.category}` : ""}

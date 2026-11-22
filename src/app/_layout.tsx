@@ -6,6 +6,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AppearanceProvider } from '@/lib/appearance';
 import { AuthProvider } from '@/lib/auth';
+import { FavoritesProvider } from '@/lib/favorites';
 import { ListingsProvider } from '@/lib/listings-provider';
 import { PreferencesProvider, usePreferences } from '@/lib/preferences';
 import OnboardingScreen from './onboarding';
@@ -30,6 +31,7 @@ function ThemedApp() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
         <PreferencesProvider>
+          <FavoritesProvider>
           <ListingsProvider>
             <AnimatedSplashOverlay />
             <Stack>
@@ -40,6 +42,7 @@ function ThemedApp() {
             </Stack>
             <FirstLaunch />
           </ListingsProvider>
+          </FavoritesProvider>
         </PreferencesProvider>
       </AuthProvider>
     </ThemeProvider>
