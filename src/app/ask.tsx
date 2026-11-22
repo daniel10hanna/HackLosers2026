@@ -1,3 +1,5 @@
+import { RecommendationChips } from "@/components/recommendation-chips";
+import { usePreferences } from "@/lib/preferences";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View,
@@ -24,6 +26,7 @@ const demoMode = process.env.EXPO_PUBLIC_DEMO_MODE === "true" || (
 );
 
 export default function AskScreen() {
+  const { prefs } = usePreferences();
   const theme = useTheme();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<AiResult | null>(null);
@@ -137,6 +140,10 @@ export default function AskScreen() {
                       {listing.kind === "event" ? "Event" : "Restaurant"}
                     </ThemedText>
                     <ThemedText type="smallBold">{listing.title}</ThemedText>
+                    <RecommendationChips
+                      listing={listing}
+                      prefs={prefs}
+                    />
                   </ThemedView>
                   <ThemedText type="small" themeColor="textSecondary">{explanation}</ThemedText>
                 </View>
