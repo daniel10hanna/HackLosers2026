@@ -4,11 +4,12 @@ import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
 import httpx
-from pydantic import AwareDatetime, BaseModel
+from pydantic import AwareDatetime, BaseModel, TypeAdapter
 
 from llm import Audience, Criteria
 
@@ -28,6 +29,11 @@ class Listing(BaseModel):
     is_indoor: bool | None = None
     kid_friendly: bool | None = None
     wheelchair_accessible: bool | None = None
+
+
+async def load_demo_listings(path: str) -> list[Listing]:
+    contents = await asyncio.to_thread(Path(path).read_bytes)
+    return TypeAdapter(list[Listing]).validate_json(contents)
 
 
 async def load_listings() -> list[Listing]:

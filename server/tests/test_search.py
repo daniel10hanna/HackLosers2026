@@ -3,18 +3,19 @@ import json
 import os
 import unittest
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi.testclient import TestClient
+from google import genai
+from google.genai import errors, types
 from pydantic import ValidationError
 
 import main
 from listings import (
     MONTREAL, Listing, explain, keyword_search, load_listings, rank_listings, search_window,
 )
-from llm import Criteria, extract_criteria
+from llm import DEFAULT_MODEL, Criteria, extract_criteria
 
 NOW = datetime(2026, 11, 21, 14, tzinfo=MONTREAL)
 
@@ -28,6 +29,15 @@ def listing(id="event-1", **fields):
         "id": id, "title": "Jazz Workshop", "kind": "event", "audience_tags": ["Family"],
         **fields,
     })
+
+
+def gemini_response(text, finish_reason=types.FinishReason.STOP):
+    return types.GenerateContentResponse(candidates=[
+        types.Candidate(
+            finish_reason=finish_reason,
+            content=types.Content(parts=[types.Part(text=text)], role="model"),
+        ),
+    ])
 
 
 class RankingTests(unittest.TestCase):
@@ -139,18 +149,62 @@ class UpstreamTests(unittest.IsolatedAsyncioTestCase):
     async def test_structured_response_and_category_validation(self):
         query = "Family music tomorrow"
         payload = criteria(audience="Family", category="Music", when="tomorrow").model_dump_json()
-        create = AsyncMock(return_value=SimpleNamespace(status="completed", output_text=payload))
-        with patch("llm.AsyncOpenAI") as sdk, patch.dict(os.environ, {"OPENAI_API_KEY": "mock"}):
-            sdk.return_value.__aenter__.return_value.responses.create = create
+        generate = AsyncMock(return_value=gemini_response(payload))
+        with patch("llm.genai.Client") as sdk, patch.dict(
+            os.environ, {"GEMINI_API_KEY": "mock", "GEMINI_MODEL": ""}
+        ):
+            sdk.return_value.aio.__aenter__.return_value.models.generate_content = generate
             extracted = await extract_criteria(query, NOW, ["Music"])
             self.assertEqual(extracted.category, "Music")
             self.assertEqual(extracted.audience, "Family")
-            args = create.call_args.kwargs
-            self.assertEqual(args["input"], query)
-            self.assertIn(NOW.isoformat(), args["instructions"])
-            self.assertTrue(args["text"]["format"]["strict"])
+            args = generate.call_args.kwargs
+            self.assertEqual(args["model"], DEFAULT_MODEL)
+            self.assertEqual(args["contents"], query)
+            self.assertFalse(sdk.call_args.kwargs["vertexai"])
+            config = args["config"]
+            self.assertIn(NOW.isoformat(), config.system_instruction)
+            self.assertEqual(config.response_mime_type, "application/json")
+            self.assertFalse(config.response_json_schema["additionalProperties"])
+            self.assertEqual(
+                config.response_json_schema["properties"]["category"]["anyOf"][0]["enum"],
+                ["Music"],
+            )
+            with patch.dict(os.environ, {"GEMINI_MODEL": "gemini-3.8-flash"}):
+                await extract_criteria(query, NOW, ["Music"])
+                self.assertEqual(generate.call_args.kwargs["model"], "gemini-3.8-flash")
             with self.assertRaises(ValueError):
                 await extract_criteria(query, NOW, ["Art"])
+
+    async def test_sdk_serializes_structured_request_to_developer_api(self):
+        def respond(request):
+            self.assertEqual(request.url.host, "generativelanguage.googleapis.com")
+            self.assertTrue(request.url.path.endswith(f"/{DEFAULT_MODEL}:generateContent"))
+            self.assertEqual(request.headers["x-goog-api-key"], "mock")
+            body = json.loads(request.content)
+            self.assertEqual(body["contents"][0]["parts"][0]["text"], "Indoor tomorrow")
+            config = body["generationConfig"]
+            self.assertEqual(config["responseMimeType"], "application/json")
+            self.assertFalse(config["responseJsonSchema"]["additionalProperties"])
+            return httpx.Response(200, json={
+                "candidates": [{
+                    "finishReason": "STOP",
+                    "content": {"role": "model", "parts": [{
+                        "text": criteria(is_indoor=True, when="tomorrow").model_dump_json(),
+                    }]},
+                }],
+            })
+
+        real_client = genai.Client
+
+        def mock_transport_client(*, http_options, **kwargs):
+            http_options.async_client_args = {"transport": httpx.MockTransport(respond)}
+            return real_client(http_options=http_options, **kwargs)
+
+        with patch("llm.genai.Client", side_effect=mock_transport_client), patch.dict(os.environ, {
+            "GEMINI_API_KEY": "mock", "GEMINI_MODEL": "",
+        }):
+            self.assertEqual(await extract_criteria("Indoor tomorrow", NOW, []),
+                             criteria(is_indoor=True, when="tomorrow"))
 
     def test_invalid_audience_and_injected_fields_rejected(self):
         fields = criteria().model_dump()
@@ -163,6 +217,7 @@ class UpstreamTests(unittest.IsolatedAsyncioTestCase):
 class ApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(main.app)
+        self.enterContext(patch.dict(os.environ, {"US06_DEMO_LISTINGS_FILE": ""}))
 
     def test_health(self):
         self.assertEqual(self.client.get("/health").json(), {"status": "ok"})
@@ -195,21 +250,21 @@ class ApiTests(unittest.TestCase):
         with patch.dict(os.environ, {
             "SUPABASE_URL": "https://example.test",
             "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_mock",
-            "OPENAI_API_KEY": "mock",
+            "GEMINI_API_KEY": "mock",
         }), patch(
             "listings.httpx.AsyncClient",
             side_effect=lambda **kwargs: async_client(
                 transport=httpx.MockTransport(supabase_response), **kwargs,
             ),
-        ), patch("llm.AsyncOpenAI") as sdk:
-            sdk.return_value.__aenter__.return_value.responses.create = AsyncMock(
-                return_value=SimpleNamespace(
-                    status="completed",
-                    output_text=criteria(category="Music", audience="Family", free_only=True).model_dump_json(),
+        ), patch("llm.genai.Client") as sdk:
+            sdk.return_value.aio.__aenter__.return_value.models.generate_content = AsyncMock(
+                return_value=gemini_response(
+                    criteria(category="Music", audience="Family", free_only=True).model_dump_json(),
                 ),
             )
             response = self.client.post("/search", json={"query": "Free music for families"})
         self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["usedFallback"])
         self.assertEqual([item["listing"]["id"] for item in response.json()["matches"]], ["jazz"])
 
     def test_invalid_request(self):
@@ -225,7 +280,7 @@ class ApiTests(unittest.TestCase):
 
     def test_missing_key_switches_to_keyword_search(self):
         with patch("main.load_listings", return_value=[listing()]), patch.dict(
-            os.environ, {"OPENAI_API_KEY": ""}
+            os.environ, {"GEMINI_API_KEY": ""}
         ):
             result = self.client.post("/search", json={"query": "jazz"}).json()
         self.assertTrue(result["usedFallback"])
@@ -242,12 +297,56 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(len(result["matches"]), 1)
 
     def test_invalid_model_output_switches_to_keyword_search(self):
-        with patch("main.load_listings", return_value=[listing()]), patch(
-            "main.extract_criteria", side_effect=ValueError("schema validation")
-        ):
-            result = self.client.post("/search", json={"query": "unicorn"}).json()
-        self.assertTrue(result["usedFallback"])
-        self.assertEqual(result["matches"], [])
+        bad_responses = [
+            gemini_response("not JSON"),
+            gemini_response('{"ids": ["fake"]}'),
+            gemini_response(criteria().model_dump_json(), types.FinishReason.MAX_TOKENS),
+            types.GenerateContentResponse(),
+        ]
+        with patch("main.load_listings", return_value=[listing()]), patch.dict(
+            os.environ, {"GEMINI_API_KEY": "mock"}
+        ), patch("llm.genai.Client") as sdk:
+            generate = sdk.return_value.aio.__aenter__.return_value.models.generate_content
+            for response in bad_responses:
+                with self.subTest(response=response):
+                    generate.return_value = response
+                    result = self.client.post("/search", json={"query": "unicorn"}).json()
+                    self.assertTrue(result["usedFallback"])
+                    self.assertEqual(result["matches"], [])
+
+    def test_gemini_api_and_transport_errors_switch_to_keyword_search(self):
+        failures = [
+            (400, "API key invalid", "authentication_or_permission"),
+            (400, "Invalid response schema", "request_schema"),
+            (403, "Permission denied", "authentication_or_permission"),
+            (404, "Unsupported model", "model_unavailable"),
+            (429, "Rate limit or quota exceeded", "quota_or_rate_limit"),
+            (503, "Unavailable", "provider_unavailable"),
+        ]
+        secret = "sensitive-provider-detail"
+        cases = [
+            ((errors.ServerError if code >= 500 else errors.ClientError)(
+                code, {"error": {"message": f"{message}: {secret}"}}
+            ), category, code)
+            for code, message, category in failures
+        ] + [
+            (httpx.ConnectError(secret), "transport", None),
+            (httpx.ReadTimeout(secret), "timeout", None),
+        ]
+        with patch("main.load_listings", return_value=[listing()]), patch.dict(
+            os.environ, {"GEMINI_API_KEY": "mock"}
+        ), patch("llm.genai.Client") as sdk:
+            generate = sdk.return_value.aio.__aenter__.return_value.models.generate_content
+            for failure, category, status in cases:
+                with self.subTest(category=category), self.assertLogs("main", level="WARNING") as logs:
+                    generate.side_effect = failure
+                    response = self.client.post("/search", json={"query": "jazz"})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertTrue(response.json()["usedFallback"])
+                    self.assertEqual(response.json()["matches"][0]["listing"], {"id": "event-1"})
+                    self.assertIn(f"category={category}", logs.output[0])
+                    self.assertIn(f"http_status={status}", logs.output[0])
+                    self.assertNotIn(secret, logs.output[0])
 
     def test_missing_database_returns_service_unavailable(self):
         with patch("main.load_listings", side_effect=ValueError("configuration missing")):
