@@ -35,10 +35,22 @@ test("match-reason placeholder returns an empty array", () => {
   assert.deepEqual(reasons(demoListings[0]), []);
 });
 
-test("AI search placeholder returns an empty result", async () => {
-  assert.deepEqual(await aiSearch("jazz tonight", demoListings), {
-    criteria: [],
-    matches: [],
-    usedFallback: false,
-  });
+test("AI search falls back to a matching demo listing", async () => {
+  const previousDemoMode = process.env.EXPO_PUBLIC_DEMO_MODE;
+  process.env.EXPO_PUBLIC_DEMO_MODE = "true";
+
+  try {
+    const result = await aiSearch("jazz tonight", demoListings);
+    assert.equal(result.usedFallback, true);
+    assert.deepEqual(
+      result.matches.map(({ listing }) => listing.title),
+      ["Evening Jazz Set"],
+    );
+  } finally {
+    if (previousDemoMode === undefined) {
+      delete process.env.EXPO_PUBLIC_DEMO_MODE;
+    } else {
+      process.env.EXPO_PUBLIC_DEMO_MODE = previousDemoMode;
+    }
+  }
 });
